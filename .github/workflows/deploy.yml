@@ -1,0 +1,63 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      sha: ${{ steps.sha.outputs.short }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract short SHA
+        id: sha
+        run: echo "short=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/ivanpashkulev/api-main:${{ steps.sha.outputs.short }}
+            ghcr.io/ivanpashkulev/api-main:latest
+
+  open-deploy-pr:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ivanpashkulev/devops
+          token: ${{ secrets.DEVOPS_PAT }}
+
+      - name: Update image tag
+        run: |
+          sed -i "s|ghcr.io/ivanpashkulev/api-main:.*|ghcr.io/ivanpashkulev/api-main:${{ needs.build-and-push.outputs.sha }}|" docker-compose.yml
+
+      - uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.DEVOPS_PAT }}
+          commit-message: "deploy: api-main → ${{ needs.build-and-push.outputs.sha }}"
+          branch: deploy/api-main-${{ needs.build-and-push.outputs.sha }}
+          title: "deploy: api-main → ${{ needs.build-and-push.outputs.sha }}"
+          body: |
+            Automated image tag update.
+
+            **Repo:** ivanpashkulev/api-main
+            **Commit:** ivanpashkulev/api-main@${{ github.sha }}

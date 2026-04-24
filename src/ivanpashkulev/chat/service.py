@@ -1,5 +1,5 @@
+from typing import AsyncIterator
 import os
-import re
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 from langchain_community.document_loaders import PyMuPDFLoader
@@ -48,11 +48,7 @@ class ChatService:
         graph.add_edge("llm_call", END)
         return graph.compile()
 
-    @staticmethod
-    def _strip_thinking(text: str) -> str:
-        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-
-    async def chat(self, message: str, history: list[dict]) -> str:
+    def _build_messages(self, message: str, history: list[dict]) -> list:
         messages = []
         for msg in history:
             if msg["role"] == "user":
@@ -60,6 +56,13 @@ class ChatService:
             elif msg["role"] == "assistant":
                 messages.append(AIMessage(content=msg["content"]))
         messages.append(HumanMessage(content=message))
+        return messages
 
-        result = await self._graph.ainvoke({"messages": messages})
-        return self._strip_thinking(result["messages"][-1].content)
+    async def stream(self, message: str, history: list[dict]) -> AsyncIterator[str]:
+        async for event in self._graph.astream_events(
+            {"messages": self._build_messages(message, history)}, version="v2"
+        ):
+            if event["event"] == "on_chat_model_stream":
+                chunk = event["data"]["chunk"].content
+                if chunk:
+                    yield chunk
