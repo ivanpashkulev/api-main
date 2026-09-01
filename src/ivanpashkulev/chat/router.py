@@ -1,9 +1,11 @@
 from typing import Annotated
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
+
+from ivanpashkulev.chat.dependencies import get_chat_service
 from ivanpashkulev.chat.schemas import ChatRequest
 from ivanpashkulev.chat.service import ChatService
-from ivanpashkulev.chat.dependencies import get_chat_service
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 

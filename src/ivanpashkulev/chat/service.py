@@ -1,16 +1,20 @@
-from typing import AsyncIterator
 import os
-from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
+from collections.abc import AsyncIterator
+
 from langchain_community.document_loaders import PyMuPDFLoader
-from langgraph.graph import StateGraph, MessagesState, START, END
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from langgraph.graph import END, START, MessagesState, StateGraph
+
 from ivanpashkulev.core.config import settings
 
 
 class ChatService:
-
-    def __init__(self, model: str = "deepseek-r1:8b"):
-        self.llm = ChatOllama(base_url=settings.ollama_base_url, model=model)
+    def __init__(self, model: str | None = None):
+        self.llm = ChatOpenAI(
+            api_key=settings.openai_api_key,
+            model=model or settings.openai_model,
+        )
         self._context = self._load_documents()
         self._graph = self._build_graph()
 
@@ -39,7 +43,9 @@ class ChatService:
 
     def _build_graph(self):
         def llm_call(state: MessagesState):
-            messages = [SystemMessage(content=self._system_prompt())] + state["messages"]
+            messages = [SystemMessage(content=self._system_prompt())] + state[
+                "messages"
+            ]
             return {"messages": [self.llm.invoke(messages)]}
 
         graph = StateGraph(MessagesState)

@@ -1,3 +1,4 @@
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -8,8 +9,9 @@ class Settings(BaseSettings):
     app_name: str = "api-main"
     debug: bool = False
 
-    # Ollama
-    ollama_base_url: str = "http://localhost:11434"
+    # OpenAI
+    openai_api_key: SecretStr
+    openai_model: str = "gpt-4o-mini"
 
     # Assets
     assets_path: str = "assets"

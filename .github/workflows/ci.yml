@@ -1,0 +1,50 @@
+name: Build and Publish ivanpashkulev.com backend
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate:
+    name: Validate FastAPI application
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          enable-cache: true
+
+      - name: Install Python
+        run: uv python install 3.14
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Run Ruff
+        run: uv run ruff check .
+
+      - name: Check formatting
+        run: uv run ruff format --check .
+
+      - name: Run tests
+        run: uv run pytest
+
+      - name: Build application package
+        if: github.event_name == 'pull_request' || github.ref == 'refs/heads/dev'
+        run: uv build
+
+  build-and-publish:
+    name: Build and Publish FastAPI image
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    uses: ivanpashkulev/devops/.github/workflows/build-and-publish.yml@main
+    secrets:
+      DEVOPS_TOKEN: ${{ secrets.DEVOPS_PAT }}
