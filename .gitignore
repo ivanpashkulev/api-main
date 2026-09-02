@@ -32,9 +32,8 @@ htmlcov/
 .vscode/*
 !.vscode/extensions.json
 .DS_Store
+.ruff_cache/
 
 # Claude Code
 .claude
 
-# Assets (personal documents — never commit)
-assets/

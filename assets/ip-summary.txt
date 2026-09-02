@@ -1,0 +1,8 @@
+Senior DevOps Engineer and Software Engineer with 5+ years of experience designing, 
+migrating, and operating enterprise-grade cloud platforms. 
+
+Strong expertise in Microsoft Azure, Azure DevOps, Infrastructure as Code, and full end-to-end automation of complex, 
+security-critical environments. 
+
+Solid software engineering background combined with hands-on DevSecOps experience. Particularly motivated by platform engineering, 
+automation, and building scalable, secure systems, with growing interest in AI-driven engineering solutions.
