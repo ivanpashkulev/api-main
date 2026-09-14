@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
 
+from ivanpashkulev.chat.schemas import ChatHistoryMessage
 from ivanpashkulev.core.config import settings
 
 
@@ -14,6 +15,7 @@ class ChatService:
         self.llm = ChatOpenAI(
             api_key=settings.openai_api_key,
             model=model or settings.openai_model,
+            max_tokens=settings.openai_max_output_tokens,
         )
         self._context = self._load_documents()
         self._graph = self._build_graph()
@@ -54,17 +56,25 @@ class ChatService:
         graph.add_edge("llm_call", END)
         return graph.compile()
 
-    def _build_messages(self, message: str, history: list[dict]) -> list:
+    def _build_messages(
+        self,
+        message: str,
+        history: list[ChatHistoryMessage],
+    ) -> list:
         messages = []
         for msg in history:
-            if msg["role"] == "user":
-                messages.append(HumanMessage(content=msg["content"]))
-            elif msg["role"] == "assistant":
-                messages.append(AIMessage(content=msg["content"]))
+            if msg.role == "user":
+                messages.append(HumanMessage(content=msg.content))
+            elif msg.role == "assistant":
+                messages.append(AIMessage(content=msg.content))
         messages.append(HumanMessage(content=message))
         return messages
 
-    async def stream(self, message: str, history: list[dict]) -> AsyncIterator[str]:
+    async def stream(
+        self,
+        message: str,
+        history: list[ChatHistoryMessage],
+    ) -> AsyncIterator[str]:
         async for event in self._graph.astream_events(
             {"messages": self._build_messages(message, history)}, version="v2"
         ):
