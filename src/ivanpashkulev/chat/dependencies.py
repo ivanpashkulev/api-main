@@ -39,9 +39,7 @@ def enforce_chat_request_limits(chat_request: ChatRequest) -> None:
             detail={"code": "chat_message_limit_exceeded"},
         )
 
-    history_characters = sum(
-        len(message.content) for message in chat_request.history
-    )
+    history_characters = sum(len(message.content) for message in chat_request.history)
     if history_characters > settings.chat_max_history_characters:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
