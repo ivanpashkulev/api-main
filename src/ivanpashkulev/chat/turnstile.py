@@ -43,11 +43,11 @@ class TurnstileService:
         except RedisError as error:
             raise TurnstileSessionStoreError from error
 
-    async def verify_and_create_session(
+    async def verify_token(
         self,
         token: str | None,
         client_ip: str,
-    ) -> str:
+    ) -> None:
         if not token:
             raise TurnstileVerificationError
 
@@ -61,6 +61,7 @@ class TurnstileService:
         ):
             raise TurnstileVerificationError
 
+    async def create_session(self) -> str:
         session_id = token_urlsafe(32)
         try:
             await self._redis.set(

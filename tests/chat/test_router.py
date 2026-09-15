@@ -41,15 +41,17 @@ class FakeTurnstileService:
     async def has_valid_session(self, session_id: str | None) -> bool:
         return self._session_verified
 
-    async def verify_and_create_session(
+    async def verify_token(
         self,
         token: str | None,
         client_ip: str,
-    ) -> str:
+    ) -> None:
         if self._verification_error:
             raise self._verification_error
         if token != "valid-token":
             raise TurnstileVerificationError
+
+    async def create_session(self) -> str:
         return "verified-session"
 
 
