@@ -8,6 +8,7 @@ from redis.exceptions import RedisError
 from ivanpashkulev.chat.rate_limit import ChatRateLimiter
 from ivanpashkulev.chat.schemas import ChatRequest
 from ivanpashkulev.chat.service import ChatService
+from ivanpashkulev.chat.turnstile import TurnstileService
 from ivanpashkulev.core.config import settings
 
 
@@ -26,10 +27,32 @@ def get_chat_rate_limiter() -> ChatRateLimiter:
     return ChatRateLimiter(get_redis(), settings.chat_rate_limit_per_day)
 
 
+@lru_cache
+def get_turnstile_service() -> TurnstileService:
+    return TurnstileService(
+        redis=get_redis(),
+        secret_key=settings.turnstile_secret_key.get_secret_value(),
+        expected_hostname=settings.turnstile_expected_hostname,
+        session_ttl_seconds=settings.turnstile_session_ttl_seconds,
+    )
+
+
 ChatRateLimiterDep = Annotated[
     ChatRateLimiter,
     Depends(get_chat_rate_limiter),
 ]
+
+
+TurnstileServiceDep = Annotated[
+    TurnstileService,
+    Depends(get_turnstile_service),
+]
+
+
+def get_client_ip(request: Request) -> str:
+    return request.headers.get("X-Real-IP") or (
+        request.client.host if request.client else "unknown"
+    )
 
 
 def enforce_chat_request_limits(chat_request: ChatRequest) -> None:
@@ -51,12 +74,10 @@ async def enforce_chat_rate_limit(
     request: Request,
     rate_limiter: ChatRateLimiterDep,
 ) -> None:
-    client_ip = request.headers.get("X-Real-IP")
-    if client_ip is None:
-        client_ip = request.client.host if request.client else "unknown"
-
     try:
-        retry_after_seconds = await rate_limiter.retry_after_seconds(client_ip)
+        retry_after_seconds = await rate_limiter.retry_after_seconds(
+            get_client_ip(request)
+        )
     except RedisError as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
