@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     chat_max_history_characters: int = Field(default=4000, gt=0)
     redis_url: str = "redis://localhost:6379/0"
 
+    # Turnstile
+    turnstile_secret_key: SecretStr
+    turnstile_expected_hostname: str | None = "ivanpashkulev.com"
+    turnstile_session_ttl_seconds: int = Field(default=86400, gt=0)
+    turnstile_cookie_secure: bool = True
+
     # Assets
     assets_path: str = "assets"
 
