@@ -6,11 +6,6 @@ from fastapi.testclient import TestClient
 from ivanpashkulev.chat.dependencies import (
     get_chat_rate_limiter,
     get_chat_service,
-    get_turnstile_service,
-)
-from ivanpashkulev.chat.turnstile import (
-    TurnstileSessionStoreError,
-    TurnstileVerificationError,
 )
 from ivanpashkulev.main import app
 
@@ -29,35 +24,10 @@ class FakeChatRateLimiter:
         return self._retry_after_seconds
 
 
-class FakeTurnstileService:
-    def __init__(
-        self,
-        session_verified: bool = False,
-        verification_error: Exception | None = None,
-    ) -> None:
-        self._session_verified = session_verified
-        self._verification_error = verification_error
-
-    async def has_valid_session(self, session_id: str | None) -> bool:
-        return self._session_verified
-
-    async def verify_and_create_session(
-        self,
-        token: str | None,
-        client_ip: str,
-    ) -> str:
-        if self._verification_error:
-            raise self._verification_error
-        if token != "valid-token":
-            raise TurnstileVerificationError
-        return "verified-session"
-
-
 @pytest.fixture
 def client() -> Generator[TestClient]:
     app.dependency_overrides[get_chat_service] = FakeChatService
     app.dependency_overrides[get_chat_rate_limiter] = FakeChatRateLimiter
-    app.dependency_overrides[get_turnstile_service] = lambda: FakeTurnstileService()
 
     with TestClient(app) as test_client:
         yield test_client
@@ -68,7 +38,7 @@ def client() -> Generator[TestClient]:
 def test_chat_streams_response(client: TestClient) -> None:
     response = client.post(
         "/chat",
-        json={"message": "Hello", "history": [], "turnstile_token": "valid-token"},
+        json={"message": "Hello", "history": []},
     )
 
     assert response.status_code == 200
@@ -87,10 +57,7 @@ def test_chat_returns_rate_limit_response(client: TestClient) -> None:
         retry_after_seconds=120
     )
 
-    response = client.post(
-        "/chat",
-        json={"message": "Hello", "history": [], "turnstile_token": "valid-token"},
-    )
+    response = client.post("/chat", json={"message": "Hello", "history": []})
 
     assert response.status_code == 429
     assert response.headers["retry-after"] == "120"
@@ -124,54 +91,3 @@ def test_chat_rejects_requests_exceeding_configured_limits(
 
     assert response.status_code == 413
     assert response.json() == {"detail": {"code": error_code}}
-
-
-def test_chat_session_reports_missing_session(client: TestClient) -> None:
-    response = client.get("/chat/session")
-
-    assert response.status_code == 200
-    assert response.json() == {"verified": False}
-
-
-def test_chat_creates_session_after_turnstile_verification(client: TestClient) -> None:
-    response = client.post(
-        "/chat",
-        json={"message": "Hello", "history": [], "turnstile_token": "valid-token"},
-    )
-
-    assert response.status_code == 200
-    assert "chat_turnstile_session=verified-session" in response.headers["set-cookie"]
-    assert "HttpOnly" in response.headers["set-cookie"]
-    assert "SameSite=lax" in response.headers["set-cookie"]
-
-
-def test_chat_rejects_request_without_turnstile_token(client: TestClient) -> None:
-    response = client.post("/chat", json={"message": "Hello", "history": []})
-
-    assert response.status_code == 403
-    assert response.json() == {"detail": {"code": "turnstile_verification_required"}}
-
-
-def test_chat_allows_existing_turnstile_session(client: TestClient) -> None:
-    app.dependency_overrides[get_turnstile_service] = lambda: FakeTurnstileService(
-        session_verified=True
-    )
-
-    response = client.post("/chat", json={"message": "Hello", "history": []})
-
-    assert response.status_code == 200
-    assert "set-cookie" not in response.headers
-
-
-def test_chat_returns_unavailable_when_session_store_fails(client: TestClient) -> None:
-    app.dependency_overrides[get_turnstile_service] = lambda: FakeTurnstileService(
-        verification_error=TurnstileSessionStoreError()
-    )
-
-    response = client.post(
-        "/chat",
-        json={"message": "Hello", "history": [], "turnstile_token": "valid-token"},
-    )
-
-    assert response.status_code == 503
-    assert response.json() == {"detail": {"code": "chat_verification_unavailable"}}
