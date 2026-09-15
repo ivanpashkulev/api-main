@@ -54,11 +54,12 @@ async def chat(
 ) -> StreamingResponse:
     enforce_chat_request_limits(request)
 
-    session_id = http_request.cookies.get(SESSION_COOKIE_NAME)
     try:
-        session_verified = await turnstile.has_valid_session(session_id)
+        session_verified = await turnstile.has_valid_session(
+            http_request.cookies.get(SESSION_COOKIE_NAME)
+        )
         if not session_verified:
-            session_id = await turnstile.verify_and_create_session(
+            await turnstile.verify_token(
                 request.turnstile_token,
                 get_client_ip(http_request),
             )
@@ -75,6 +76,16 @@ async def chat(
 
     await enforce_chat_rate_limit(http_request, rate_limiter)
 
+    new_session_id: str | None = None
+    if not session_verified:
+        try:
+            new_session_id = await turnstile.create_session()
+        except TurnstileSessionStoreError as error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail={"code": "chat_verification_unavailable"},
+            ) from error
+
     async def generate():
         async for chunk in service.stream(request.message, request.history):
             yield f"data: {chunk}\n\n"
@@ -82,10 +93,10 @@ async def chat(
 
     response = StreamingResponse(generate(), media_type="text/event-stream")
 
-    if not session_verified:
+    if new_session_id:
         response.set_cookie(
             key=SESSION_COOKIE_NAME,
-            value=session_id,
+            value=new_session_id,
             max_age=settings.turnstile_session_ttl_seconds,
             httponly=True,
             secure=settings.turnstile_cookie_secure,
