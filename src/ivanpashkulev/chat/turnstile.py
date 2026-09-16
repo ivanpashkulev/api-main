@@ -1,3 +1,4 @@
+import logging
 from secrets import token_urlsafe
 
 import httpx
@@ -7,6 +8,8 @@ from redis.exceptions import RedisError
 SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 SESSION_COOKIE_NAME = "chat_turnstile_session"
 SESSION_KEY_PREFIX = "chat-turnstile-session:"
+
+logger = logging.getLogger(__name__)
 
 
 class TurnstileVerificationError(Exception):
@@ -53,12 +56,22 @@ class TurnstileService:
 
         result = await self._validate_token(token, client_ip)
         if result.get("success") is not True:
+            logger.warning(
+                "Turnstile verification rejected: error_codes=%s hostname=%s",
+                result.get("error-codes"),
+                result.get("hostname"),
+            )
             raise TurnstileVerificationError
 
         if (
             self._expected_hostname
             and result.get("hostname") != self._expected_hostname
         ):
+            logger.warning(
+                "Turnstile hostname mismatch: expected=%s actual=%s",
+                self._expected_hostname,
+                result.get("hostname"),
+            )
             raise TurnstileVerificationError
 
     async def create_session(self) -> str:
